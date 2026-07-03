@@ -1,0 +1,970 @@
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { 
+  Play, Flag, ChevronUp, ChevronDown, ChevronLeft, ChevronRight,
+  CheckCircle2, Star, Trophy, ArrowRight, Zap, Target, RotateCcw,
+  Camera, CameraOff, Hand, Eye
+} from 'lucide-react';
+
+// --- DATABASE: ความรู้และไอเทม ---
+const ITEMS = {
+  G1: { id: 'G1', type: 'good', text: 'ตรวจสอบก่อนแชร์', emoji: '🔍', color: 'text-emerald-600', bg: 'bg-emerald-100' },
+  G2: { id: 'G2', type: 'good', text: 'เช็คบัญชีจริง', emoji: '✅', color: 'text-emerald-600', bg: 'bg-emerald-100' },
+  G3: { id: 'G3', type: 'good', text: 'เคารพผู้อื่น', emoji: '💖', color: 'text-emerald-600', bg: 'bg-emerald-100' },
+  G4: { id: 'G4', type: 'good', text: 'พูดจาสุภาพ', emoji: '🗣️', color: 'text-emerald-600', bg: 'bg-emerald-100' },
+  G5: { id: 'G5', type: 'good', text: 'ตั้งค่าส่วนตัว', emoji: '🔐', color: 'text-emerald-600', bg: 'bg-emerald-100' },
+  B1: { id: 'B1', type: 'bad', text: 'ข่าวปลอม', emoji: '🤥', color: 'text-rose-600', bg: 'bg-rose-100' },
+  B2: { id: 'B2', type: 'bad', text: 'สแปมกวนใจ', emoji: '👾', color: 'text-rose-600', bg: 'bg-rose-100' },
+  B3: { id: 'B3', type: 'bad', text: 'คำหยาบคาย', emoji: '🙊', color: 'text-rose-600', bg: 'bg-rose-100' },
+  B4: { id: 'B4', type: 'bad', text: 'รังแกผู้อื่น', emoji: '👿', color: 'text-rose-600', bg: 'bg-rose-100' },
+  B5: { id: 'B5', type: 'bad', text: 'ขโมยข้อมูล', emoji: '🦊', color: 'text-rose-600', bg: 'bg-rose-100' },
+};
+
+// --- LEVEL CONFIGURATION (20 Levels) ---
+const LEVELS = [
+  { ch: 1, title: 'นักสืบฝึกหัด', desc: 'สวัสดีฮะ! พี่บอทตี้เอง 🤖 ภารกิจแรกของน้องๆ คือตามหาแว่นขยาย 🔍 เพื่อเรียนรู้การ "ตรวจสอบข้อมูล" ก่อนจะแชร์ให้เพื่อนๆ นะฮะ!', req: ['G1'], traps: [] },
+  { ch: 1, title: 'ระวังคนโกหก', desc: 'ว้าก! มีข่าวปลอม 🤥 ซ่อนอยู่ อย่าเดินไปชนมันนะ! ให้เก็บเฉพาะแว่นขยาย 🔍 เพื่อตรวจสอบความจริงเท่านั้น', req: ['G1','G1'], traps: ['B1'] },
+  { ch: 1, title: 'ใครคือตัวจริง?', desc: 'โลกออนไลน์มีคนแกล้งเป็นคนอื่นเยอะเลย น้องๆ ต้องหาเครื่องหมายติ๊กถูก ✅ เพื่อยืนยัน "บัญชีจริง" นะฮะ', req: ['G2'], traps: ['B1'] },
+  { ch: 1, title: 'ขยะอวกาศ', desc: 'ระวังสแปมกวนใจ 👾 มันเหมือนขยะอวกาศเลย หลบมันให้ดี แล้วไปเก็บแว่นขยาย 🔍 กับติ๊กถูก ✅ กันเถอะ!', req: ['G1','G2'], traps: ['B2','B2'] },
+  { ch: 1, title: 'บททดสอบด่านแรก', desc: 'เอาล่ะ! แสดงให้พี่บอทตี้เห็นหน่อยว่าน้องๆ หลบข่าวปลอม 🤥 และสแปม 👾 ได้เก่งแค่ไหน ลุยเลยนักบินอวกาศ!', req: ['G1','G2'], traps: ['B1','B2'] },
+  
+  { ch: 2, title: 'ส่งต่อความรัก', desc: 'การพูดคุยกันดีๆ ทำให้โลกน่าอยู่ขึ้น 💖 ตามหาหัวใจแห่งการ "เคารพผู้อื่น" ให้เจอสิฮะ', req: ['G3'], traps: [] },
+  { ch: 2, title: 'ปิดปากคำหยาบ', desc: 'อุ๊บส์! มีคำหยาบคายหลุดมา 🙊 อย่าเข้าไปใกล้นะ เราต้องพูดจาสุภาพ 🗣️ และส่งหัวใจให้กัน 💖', req: ['G3','G4'], traps: ['B3'] },
+  { ch: 2, title: 'ฮีโร่ใจดี', desc: 'พี่บอทตี้ไม่ชอบคนรังแกคนอื่นเลย 👿 น้องๆ ต้องเป็นฮีโร่ที่พูดจาสุภาพ 🗣️ และหลีกเลี่ยงการรังแกนะฮะ', req: ['G4','G4'], traps: ['B4','B3'] },
+  { ch: 2, title: 'เพื่อนบ้านที่ดี', desc: 'ถึงเราจะคิดไม่เหมือนกัน แต่เราก็คุยกันดีๆ ได้ 💖 ตามหาไอเทมความดีให้ครบ แล้วระวังคำหยาบด้วยล่ะ 🙊', req: ['G3','G3','G4'], traps: ['B3'] },
+  { ch: 2, title: 'ดาวแห่งรอยยิ้ม', desc: 'เคลียร์พื้นที่ให้เป็นดาวที่มีแต่รอยยิ้ม เก็บหัวใจ 💖 และการพูดจาสุภาพ 🗣️ ให้หมดเลย!', req: ['G3','G4'], traps: ['B2','B3'] },
+
+  { ch: 3, title: 'กุญแจวิเศษ', desc: 'ข้อมูลส่วนตัวของเราสำคัญมาก! 🔐 น้องๆ ต้องเก็บแม่กุญแจเพื่อ "ตั้งค่าความเป็นส่วนตัว" ให้ปลอดภัยนะฮะ', req: ['G5'], traps: [] },
+  { ch: 3, title: 'จิ้งจอกจอมขโมย', desc: 'ระวังจิ้งจอกเจ้าเล่ห์ 🦊 ที่คอยจะขโมยข้อมูลของเรา! รีบไปเก็บกุญแจ 🔐 มาล็อคประตูเถอะ', req: ['G5','G5'], traps: ['B5'] },
+  { ch: 3, title: 'เกราะป้องกันภัย', desc: 'นอกจากปกป้องตัวเองแล้ว เราต้องให้ความเคารพผู้อื่น 💖 ด้วย หลบจิ้งจอก 🦊 ให้พ้นนะ!', req: ['G3','G5'], traps: ['B5','B5'] },
+  { ch: 3, title: 'รักษาสิทธิ์', desc: 'อย่าไปรังแกใคร 👿 และอย่าให้ใครมาขโมยข้อมูล 🦊 เก็บไอเทมดีๆ เพื่อสร้างเกราะคุ้มกันกันเถอะ', req: ['G4','G5'], traps: ['B4','B5'] },
+  { ch: 3, title: 'สุดยอดการป้องกัน', desc: 'ตรวจสอบก่อนแชร์ 🔍 และล็อคข้อมูลให้แน่นหนา 🔐 นี่คือสุดยอดการป้องกันภัยไซเบอร์!', req: ['G1','G5'], traps: ['B1','B4','B5'] },
+
+  { ch: 4, title: 'วงกตมหัศจรรย์', desc: 'เขาวงกตเริ่มซับซ้อนขึ้นแล้วฮะ! มีทั้งข่าวปลอม 🤥 และสแปม 👾 น้องๆ ต้องมีสตินะ', req: ['G1','G4'], traps: ['B1','B2','B3'] },
+  { ch: 4, title: 'ตัวจริงใจดี', desc: 'เป็นคนดี ต้องใช้บัญชีจริง ✅ และเคารพคนอื่น 💖 ระวังคนรังแกผู้อื่นด้วยล่ะ 👿', req: ['G2','G3'], traps: ['B4','B5'] },
+  { ch: 4, title: 'ภารกิจรอบด้าน', desc: 'ทุกอย่างรวมกันอยู่ที่นี่! ใช้ความรู้ทั้งหมดที่เรียนมาเพื่อเลือกทางเดินที่ถูกต้องนะนักบินอวกาศน้อย', req: ['G1','G3','G5'], traps: ['B1','B3','B4'] },
+  { ch: 4, title: 'ด่านก่อนจบ', desc: 'เกือบถึงเส้นชัยของหลักสูตรแล้ว! เก็บไอเทมความดีให้ครบ 4 อย่างเพื่อผ่านประตูไป', req: ['G1','G2','G3','G4'], traps: ['B1','B2','B3'] },
+  { ch: 4, title: 'สุดยอดพลเมือง X', desc: 'ด่านสุดท้าย! 🌟 แสดงพลังของ "สุดยอดพลเมืองดิจิทัล" เก็บของดีครบ 5 อย่าง และห้ามโดนกับดักเด็ดขาด โชคดีฮะ!', req: ['G1','G2','G3','G4','G5'], traps: ['B1','B2','B3','B4','B5'] },
+];
+
+const TEMPLATES = [
+  // Size 10x10
+  [
+    "1111111111",
+    "1000100001",
+    "1010101101",
+    "1010001001",
+    "1011111011",
+    "1000000001",
+    "1110111101",
+    "1000100001",
+    "1011101101",
+    "1111111111",
+  ],
+  // Size 12x12
+  [
+    "111111111111",
+    "100000100001",
+    "101110101101",
+    "101000000101",
+    "101011110101",
+    "100010000001",
+    "111010111111",
+    "100010100001",
+    "101110101101",
+    "100000000101",
+    "111111110001",
+    "111111111111",
+  ],
+  // Size 14x12
+  [
+    "11111111111111",
+    "10000010000001",
+    "10111010111101",
+    "10100000100001",
+    "10101111101111",
+    "10001000000001",
+    "11101011111101",
+    "10000010000101",
+    "10111110110101",
+    "10000000010001",
+    "11111111111101",
+    "11111111111111",
+  ]
+];
+
+export default function App() {
+  const [gameState, setGameState] = useState('menu'); 
+  const [currentLevelIdx, setCurrentLevelIdx] = useState(0);
+  
+  const [game, setGame] = useState({
+    maze: [],
+    pos: { r: 1, c: 1 },
+    collected: [],
+    stars: 3
+  });
+
+  const [toast, setToast] = useState(null);
+  const [levelStats, setLevelStats] = useState(Array(20).fill(0));
+  
+  // AR & Camera Fallback States
+  const [arEnabled, setArEnabled] = useState(false);
+  const [cameraError, setCameraError] = useState(false);
+  const videoRef = useRef(null);
+  const appContainerRef = useRef(null);
+  const mazeRef = useRef(null); 
+  
+  // Hand Gesture AR States
+  const [scriptsLoaded, setScriptsLoaded] = useState(false);
+  const [recognizedGesture, setRecognizedGesture] = useState(null);
+  const handsRef = useRef(null);
+  const rafId = useRef(null);
+  const lastGestureTime = useRef(0);
+  const lastAiProcessTime = useRef(0); // 🚀 เพิ่มตัวแปร Throttling ของ AI
+  const gameStateRef = useRef(gameState);
+
+  // Swipe/Drag States - 🚀 ถอด touchPos ออกจาก State ไปใช้ Ref แทนเพื่อลดอาการกระตุก
+  const [dragStart, setDragStart] = useState(null);
+  const touchRingRef = useRef(null);
+  const [hasMoved, setHasMoved] = useState(false); 
+  const DRAG_THRESHOLD = 30; 
+
+  const currentLevel = LEVELS[currentLevelIdx];
+
+  // Update refs to be used securely inside RequestAnimationFrame and EventListeners
+  useEffect(() => { gameStateRef.current = gameState; }, [gameState]);
+
+  const showToast = useCallback((msg, type = 'info') => {
+    setToast({ msg, type });
+    setTimeout(() => setToast(null), 3500);
+  }, []);
+
+  // --- Load MediaPipe Scripts Gracefully ---
+  useEffect(() => {
+    const loadScript = (src) => new Promise((resolve) => {
+      if (document.querySelector(`script[src="${src}"]`)) return resolve();
+      const script = document.createElement('script');
+      script.src = src;
+      script.crossOrigin = "anonymous";
+      script.onload = resolve;
+      script.onerror = () => resolve(); 
+      document.head.appendChild(script);
+    });
+
+    Promise.all([
+      loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js')
+    ]).then(() => {
+      if (window.Hands) {
+        setScriptsLoaded(true);
+      }
+    });
+  }, []);
+
+  // --- Start / Stop AR Mode ---
+  const toggleAR = async () => {
+    if (!arEnabled) {
+      setArEnabled(true);
+      setCameraError(false);
+      try {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          throw new Error("Browser API not supported");
+        }
+        let stream;
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } } });
+        } catch (err) {
+          stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        }
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          await videoRef.current.play().catch(e => console.warn("Video play bypass:", e));
+        }
+        showToast('เปิดโหมด AR และพร้อมตรวจจับมือแล้ว!', 'success');
+      } catch (err) {
+        console.warn("Camera Bypass:", err);
+        setCameraError(true); 
+        showToast('ระบบสลับไปใช้ภาพจำลองอัตโนมัติ (ถูกบล็อกกล้อง) 🎒', 'warning');
+      }
+    } else {
+      if (videoRef.current && videoRef.current.srcObject) {
+        videoRef.current.srcObject.getTracks().forEach(t => t.stop());
+        videoRef.current.srcObject = null;
+      }
+      setArEnabled(false);
+      setCameraError(false);
+      if (rafId.current) cancelAnimationFrame(rafId.current);
+      setRecognizedGesture(null);
+      showToast('ปิดโหมด AR', 'info');
+    }
+  };
+
+  // --- MediaPipe Hand Gesture Processing ---
+  const detectGesture = (landmarks) => {
+    const thumbTip = landmarks[4];
+    const indexTip = landmarks[8];
+    const middleTip = landmarks[12];
+    const ringTip = landmarks[16];
+    const pinkyTip = landmarks[20];
+
+    const indexMCP = landmarks[5];
+    const middleMCP = landmarks[9];
+    const ringMCP = landmarks[13];
+    const pinkyMCP = landmarks[17];
+
+    const pinchDist = Math.hypot(thumbTip.x - indexTip.x, thumbTip.y - indexTip.y);
+    
+    // Check if fingers are extended
+    const isIndexOpen = indexTip.y < indexMCP.y;
+    const isMiddleOpen = middleTip.y < middleMCP.y;
+    const isRingOpen = ringTip.y < ringMCP.y;
+    const isPinkyOpen = pinkyTip.y < pinkyMCP.y;
+
+    const isPinch = pinchDist < 0.08; 
+    const isFist = !isIndexOpen && !isMiddleOpen && !isRingOpen && !isPinkyOpen && !isPinch;
+    const isOpenPalm = isIndexOpen && isMiddleOpen && isRingOpen && isPinkyOpen && !isPinch;
+    const isPeaceSign = isIndexOpen && isMiddleOpen && !isRingOpen && !isPinkyOpen && !isPinch;
+
+    if (isPinch) return 'UP';      
+    if (isPeaceSign) return 'DOWN'; 
+    if (isOpenPalm) return 'RIGHT'; 
+    if (isFist) return 'LEFT';      
+
+    return null;
+  };
+
+  const moveRef = useRef(null);
+
+  useEffect(() => {
+    if (!scriptsLoaded || !arEnabled || cameraError) return;
+
+    try {
+      const hands = new window.Hands({locateFile: (file) => {
+        return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
+      }});
+      
+      hands.setOptions({
+        maxNumHands: 1,
+        modelComplexity: 0,
+        minDetectionConfidence: 0.65,
+        minTrackingConfidence: 0.65
+      });
+
+      hands.onResults((results) => {
+        if (gameStateRef.current !== 'playing') return;
+
+        if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+          const gesture = detectGesture(results.multiHandLandmarks[0]);
+          if (gesture) {
+            setRecognizedGesture(gesture);
+            const now = Date.now();
+            if (now - lastGestureTime.current > 400 && moveRef.current) {
+              lastGestureTime.current = now;
+              setHasMoved(true);
+              if (gesture === 'UP') moveRef.current(-1, 0);
+              else if (gesture === 'DOWN') moveRef.current(1, 0);
+              else if (gesture === 'LEFT') moveRef.current(0, -1);
+              else if (gesture === 'RIGHT') moveRef.current(0, 1);
+            }
+          } else {
+            setRecognizedGesture(null);
+          }
+        } else {
+          setRecognizedGesture(null);
+        }
+      });
+
+      handsRef.current = hands;
+
+      const detectFrame = async () => {
+        // 🚀 Throttling AI Processing: จำกัดให้รันแค่ 10 FPS เพื่อไม่ให้เบราว์เซอร์กระตุก
+        if (videoRef.current && handsRef.current && videoRef.current.readyState >= 2) {
+          const now = Date.now();
+          if (now - lastAiProcessTime.current > 100) { 
+            lastAiProcessTime.current = now;
+            try {
+              await handsRef.current.send({ image: videoRef.current });
+            } catch(e) {} 
+          }
+        }
+        rafId.current = requestAnimationFrame(detectFrame);
+      };
+      
+      detectFrame();
+
+      return () => {
+        cancelAnimationFrame(rafId.current);
+        hands.close();
+        handsRef.current = null;
+      };
+    } catch(err) {
+      console.warn("Hand tracking bypass", err);
+    }
+  }, [scriptsLoaded, arEnabled, cameraError]);
+
+  useEffect(() => {
+    if (appContainerRef.current) appContainerRef.current.focus();
+  }, [gameState, game]);
+
+  // Anti-Scroll system
+  useEffect(() => {
+    const el = mazeRef.current;
+    const preventScroll = (e) => { e.preventDefault(); };
+    if (el && gameState === 'playing') {
+      el.addEventListener('touchmove', preventScroll, { passive: false });
+    }
+    return () => { if (el) el.removeEventListener('touchmove', preventScroll); };
+  }, [gameState]);
+
+  const initLevel = useCallback((targetIdx) => {
+    const level = LEVELS[targetIdx];
+    let templateIdx = 0;
+    if (targetIdx >= 5) templateIdx = 1;
+    if (targetIdx >= 12) templateIdx = 2;
+    
+    const template = TEMPLATES[templateIdx];
+    let newMaze = template.map(row => row.split('').map(c => c === '1' ? 'W' : 'P'));
+    const height = newMaze.length;
+    const width = newMaze[0].length;
+    
+    let availablePaths = [];
+    for (let r = 1; r < height - 1; r++) {
+      for (let c = 1; c < width - 1; c++) {
+        const isStartZone = (r <= 2 && c <= 2);
+        const isFinishZone = (r >= height - 3 && c >= width - 3);
+        if (newMaze[r][c] === 'P' && !isStartZone && !isFinishZone) {
+          availablePaths.push({r, c});
+        }
+      }
+    }
+    
+    for (let i = availablePaths.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [availablePaths[i], availablePaths[j]] = [availablePaths[j], availablePaths[i]];
+    }
+
+    level.req.forEach(itemId => {
+      const p = availablePaths.pop();
+      if(p) newMaze[p.r][p.c] = itemId;
+    });
+
+    level.traps.forEach(itemId => {
+      const p = availablePaths.pop();
+      if(p) newMaze[p.r][p.c] = itemId;
+    });
+
+    newMaze[1][1] = 'S';
+    newMaze[height-2][width-2] = 'F';
+
+    setGame({ maze: newMaze, pos: { r: 1, c: 1 }, collected: [], stars: 3 });
+    setCurrentLevelIdx(targetIdx);
+    setGameState('briefing');
+    setDragStart(null); 
+    setHasMoved(false); 
+  }, []); 
+
+  const move = useCallback((dr, dc) => {
+    if (gameStateRef.current !== 'playing') return;
+    setHasMoved(true); 
+
+    setGame(prev => {
+      const nr = prev.pos.r + dr;
+      const nc = prev.pos.c + dc;
+
+      if (nr < 0 || nr >= prev.maze.length || nc < 0 || nc >= prev.maze[0].length) return prev;
+      const cell = prev.maze[nr][nc];
+      if (cell === 'W') return prev; 
+
+      if (cell === 'F') {
+        const level = LEVELS[currentLevelIdx]; 
+        const reqCounts = level.req.reduce((acc, id) => ({ ...acc, [id]: (acc[id] || 0) + 1 }), {});
+        const collectedCounts = prev.collected.reduce((acc, id) => ({ ...acc, [id]: (acc[id] || 0) + 1 }), {});
+        const hasAllReq = Object.keys(reqCounts).every(id => (collectedCounts[id] || 0) >= reqCounts[id]);
+        
+        if (!hasAllReq) {
+          showToast('น้องๆ ต้องเก็บเป้าหมายให้ครบก่อนเข้าเส้นชัยนะฮะ!', 'error');
+          return prev;
+        }
+        
+        setTimeout(() => {
+          setGameState('level_complete');
+          setLevelStats(stats => {
+            const newStats = [...stats];
+            newStats[currentLevelIdx] = Math.max(newStats[currentLevelIdx], prev.stars);
+            return newStats;
+          });
+        }, 0);
+        return { ...prev, pos: { r: nr, c: nc } };
+      }
+
+      let nextCollected = prev.collected;
+      let nextStars = prev.stars;
+      let nextMaze = prev.maze;
+      let isChanged = false;
+
+      if (ITEMS[cell] && ITEMS[cell].type === 'good') {
+        nextCollected = [...prev.collected, cell];
+        setTimeout(() => showToast(`เก่งมาก! เก็บ ${ITEMS[cell].text} ได้แล้ว`, 'success'), 0);
+        isChanged = true;
+      }
+      if (ITEMS[cell] && ITEMS[cell].type === 'bad') {
+        nextStars = Math.max(0, prev.stars - 1);
+        setTimeout(() => showToast(`อุ๊ย! ชน ${ITEMS[cell].text} (ดาวลดลงนะ)`, 'error'), 0);
+        isChanged = true;
+      }
+
+      if (isChanged) {
+        nextMaze = [...prev.maze];
+        nextMaze[nr] = [...nextMaze[nr]];
+        nextMaze[nr][nc] = 'P'; 
+      }
+
+      return { ...prev, pos: { r: nr, c: nc }, maze: nextMaze, collected: nextCollected, stars: nextStars };
+    });
+  }, [currentLevelIdx, showToast]);
+
+  useEffect(() => { moveRef.current = move; }, [move]);
+
+  // --- 🚀 Swipe / Touch Handling Optimized ---
+  const handleDragStart = (x, y) => {
+    if (gameState !== 'playing') return;
+    setDragStart({ x, y });
+    
+    // ตั้งค่าตำแหน่งเริ่มต้นของวงแหวนผ่าน DOM แทนการใช้ setState
+    if (touchRingRef.current) {
+      touchRingRef.current.style.left = `${x}px`;
+      touchRingRef.current.style.top = `${y}px`;
+    }
+  };
+
+  const handleDragMove = (x, y) => {
+    if (!dragStart || gameState !== 'playing') return;
+    
+    // 🚀 อัปเดตตำแหน่งวงแหวนที่ DOM ทันที ไม่รอ React Batch Render ทำให้ลื่นไหล 60FPS
+    if (touchRingRef.current) {
+      touchRingRef.current.style.left = `${x}px`;
+      touchRingRef.current.style.top = `${y}px`;
+    }
+
+    const dx = x - dragStart.x;
+    const dy = y - dragStart.y;
+
+    if (Math.abs(dx) > DRAG_THRESHOLD || Math.abs(dy) > DRAG_THRESHOLD) {
+      if (Math.abs(dx) > Math.abs(dy)) {
+        if (dx > 0) move(0, 1);
+        else move(0, -1);
+        setDragStart({ x, y: dragStart.y }); 
+      } else {
+        if (dy > 0) move(1, 0);
+        else move(-1, 0);
+        setDragStart({ x: dragStart.x, y });
+      }
+    }
+  };
+
+  const handleDragEnd = () => {
+    setDragStart(null);
+  };
+
+  // --- Keyboard Handling ---
+  const handleKeyDown = useCallback((e) => {
+    if(gameStateRef.current !== 'playing') return;
+    if(["Space", " ", "ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].indexOf(e.key) > -1) {
+      e.preventDefault();
+    }
+    switch(e.key) {
+      case 'ArrowUp': 
+      case ' ': 
+          move(-1, 0); break;
+      case 'ArrowDown': move(1, 0); break;
+      case 'ArrowLeft': move(0, -1); break;
+      case 'ArrowRight': move(0, 1); break;
+      default: break;
+    }
+  }, [move]);
+
+  const handleBtnDown = (e, dr, dc) => {
+    e.preventDefault();
+    move(dr, dc);
+    if (appContainerRef.current) appContainerRef.current.focus();
+  };
+
+  const renderReqProgress = () => {
+    const reqCounts = currentLevel.req.reduce((acc, id) => ({ ...acc, [id]: (acc[id] || 0) + 1 }), {});
+    const collectedCounts = game.collected.reduce((acc, id) => ({ ...acc, [id]: (acc[id] || 0) + 1 }), {});
+
+    return Object.keys(reqCounts).map(id => {
+      const item = ITEMS[id];
+      const target = reqCounts[id];
+      const current = collectedCounts[id] || 0;
+      const done = current >= target;
+      
+      return (
+        <div key={id} className={`flex items-center gap-3 p-3 rounded-2xl border-2 transition-all ${done ? 'bg-emerald-50 border-emerald-300' : (arEnabled ? 'bg-white/90 border-slate-200 shadow-sm' : 'bg-white border-slate-200 shadow-sm')}`}>
+          <div className="text-2xl">{item.emoji}</div>
+          <span className={`text-sm sm:text-base font-bold ${done ? 'text-emerald-700' : 'text-slate-700'}`}>
+            {item.text} ({Math.min(current, target)}/{target})
+          </span>
+          {done && <CheckCircle2 size={24} className="text-emerald-500 ml-auto animate-bounce" />}
+        </div>
+      );
+    });
+  };
+
+  // --- Theme Colors ---
+  let themeColor = 'bg-blue-500';
+  let lightThemeColor = 'bg-blue-50';
+  let borderColor = 'border-blue-200';
+  if(currentLevel.ch === 2) { themeColor = 'bg-pink-500'; lightThemeColor = 'bg-pink-50'; borderColor = 'border-pink-200'; }
+  if(currentLevel.ch === 3) { themeColor = 'bg-purple-500'; lightThemeColor = 'bg-purple-50'; borderColor = 'border-purple-200'; }
+  if(currentLevel.ch === 4) { themeColor = 'bg-orange-500'; lightThemeColor = 'bg-orange-50'; borderColor = 'border-orange-200'; }
+
+  if (arEnabled) {
+    themeColor = themeColor.replace('500', '500/90') + ' backdrop-blur-md';
+    lightThemeColor = 'bg-white/60 backdrop-blur-md';
+  }
+
+  const customStyles = `
+    @keyframes fingerSwipe {
+      0% { transform: translate(0, 0) scale(1) rotate(-10deg); opacity: 0; }
+      20% { opacity: 1; transform: translate(0, 0) scale(0.9) rotate(-10deg); }
+      70% { transform: translate(50px, -50px) scale(0.9) rotate(-10deg); opacity: 1; }
+      100% { transform: translate(50px, -50px) scale(1) rotate(-10deg); opacity: 0; }
+    }
+    .animate-finger {
+      animation: fingerSwipe 2s infinite ease-in-out;
+      filter: drop-shadow(0 4px 6px rgba(0,0,0,0.4));
+    }
+    .touch-ring {
+      pointer-events: none;
+      position: fixed;
+      width: 60px;
+      height: 60px;
+      border-radius: 50%;
+      background-color: rgba(59, 130, 246, 0.4);
+      border: 3px solid rgba(147, 197, 253, 0.8);
+      transform: translate(-50%, -50%);
+      z-index: 9999;
+      animation: pulse 1s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    }
+  `;
+
+  return (
+    <div 
+      ref={appContainerRef}
+      tabIndex={0}
+      onKeyDown={handleKeyDown}
+      className={`min-h-screen font-sans text-slate-800 pb-24 md:pb-6 flex flex-col overscroll-none outline-none ${
+        arEnabled && !cameraError ? 'bg-transparent' : 'bg-slate-50'
+      }`}
+    >
+      <style>{customStyles}</style>
+
+      {/* 🚀 ย้ายวงแหวนเอฟเฟกต์มาให้ลื่นไหล (ซ่อนถ้าไม่ได้กดลาก) */}
+      <div 
+        ref={touchRingRef} 
+        className="touch-ring" 
+        style={{ display: dragStart ? 'block' : 'none' }}
+      ></div>
+
+      {/* ภาพพื้นหลังโหมด AR */}
+      {arEnabled && cameraError ? (
+        <img 
+          src="https://images.unsplash.com/photo-1577896851231-70ef18881754?auto=format&fit=crop&q=80&w=2000" 
+          alt="Classroom"
+          className="fixed inset-0 w-full h-full object-cover z-[-1] opacity-70"
+        />
+      ) : (
+        <video
+          ref={videoRef}
+          autoPlay
+          playsInline
+          muted
+          className={`fixed inset-0 w-full h-full object-cover z-[-1] transition-opacity duration-500 ${arEnabled ? 'opacity-100' : 'opacity-0'}`}
+        />
+      )}
+
+      {/* --- MENU STATE --- */}
+      {gameState === 'menu' && (
+        <div className={`flex-1 flex flex-col items-center justify-center p-6 text-white text-center relative overflow-hidden ${arEnabled ? 'bg-black/20 backdrop-blur-sm' : 'bg-[#0f172a] bg-[url("https://www.transparenttextures.com/patterns/cubes.png")]'}`}>
+          <div className="absolute top-10 left-10 text-4xl animate-pulse opacity-50">⭐</div>
+          <div className="absolute bottom-20 right-10 text-5xl animate-bounce opacity-50 delay-150">🚀</div>
+          
+          <div className="mb-6 relative">
+            <div className="w-32 h-32 md:w-40 md:h-40 bg-emerald-400 rounded-full flex items-center justify-center shadow-[0_0_40px_rgba(16,185,129,0.5)] border-4 border-white z-10 relative">
+              <img src="https://api.dicebear.com/7.x/bottts/svg?seed=TeacherBot&backgroundColor=10b981" alt="Botty Mascot" className="w-full h-full rounded-full" />
+            </div>
+            <div className="absolute -right-4 -bottom-2 bg-yellow-400 text-black text-xs font-bold px-3 py-1 rounded-full border-2 border-white shadow-lg transform rotate-12">
+              พี่บอทตี้!
+            </div>
+          </div>
+
+          <h1 className="text-4xl sm:text-5xl md:text-6xl font-black mb-4 bg-clip-text text-transparent bg-gradient-to-r from-cyan-300 to-emerald-400 drop-shadow-sm">
+            ผจญภัยอวกาศ X
+          </h1>
+          <p className="text-lg sm:text-xl text-white/90 max-w-lg mb-8 font-medium drop-shadow-md">
+            มาเล่นเกม 20 ด่าน เพื่อเป็นสุดยอดพลเมืองดิจิทัล<br/>ที่ทั้งเก่งและใจดีกันเถอะ!
+          </p>
+
+          <div className="flex flex-col gap-4">
+            <button 
+              onClick={() => initLevel(0)}
+              className="bg-gradient-to-r from-emerald-400 to-emerald-500 hover:from-emerald-500 hover:to-emerald-600 text-white font-extrabold text-2xl py-4 px-12 rounded-full transition-transform hover:scale-110 active:scale-95 shadow-[0_10px_25px_rgba(16,185,129,0.5)] border-4 border-emerald-300 flex items-center gap-3"
+            >
+              เริ่มผจญภัย <Play size={28} fill="currentColor" />
+            </button>
+            
+            <button 
+              onClick={toggleAR}
+              className={`flex items-center justify-center gap-2 font-bold py-3 px-8 rounded-full transition-all border-2 ${
+                arEnabled 
+                  ? 'bg-rose-500/90 text-white border-rose-300 hover:bg-rose-600' 
+                  : 'bg-white/10 text-white border-white/30 hover:bg-white/20 backdrop-blur-sm'
+              }`}
+            >
+              {arEnabled ? <CameraOff size={20} /> : <Camera size={20} />}
+              {arEnabled ? 'ปิดโหมด AR' : 'เปิดกล้องเล่นโหมด AR + AI'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* --- BRIEFING STATE --- */}
+      {gameState === 'briefing' && (
+        <div className={`flex-1 flex items-center justify-center p-4 ${arEnabled ? 'bg-black/10' : 'bg-slate-100 bg-[url("https://www.transparenttextures.com/patterns/cubes.png")]'}`}>
+          <div className="max-w-2xl w-full">
+            <div className="flex flex-col md:flex-row items-end md:items-start gap-6 mb-8">
+              <div className="flex-shrink-0 animate-bounce mx-auto md:mx-0">
+                 <img src="https://api.dicebear.com/7.x/bottts/svg?seed=TeacherBot&backgroundColor=10b981" alt="Botty Mascot" className="w-32 h-32 md:w-40 md:h-40 rounded-full shadow-xl border-4 border-white bg-emerald-400" />
+              </div>
+              
+              <div className={`p-6 md:p-8 rounded-3xl shadow-xl relative border-4 border-emerald-200 flex-1 ${arEnabled ? 'bg-white/95 backdrop-blur-sm' : 'bg-white'}`}>
+                 <div className={`absolute top-1/2 -left-4 w-6 h-6 border-b-4 border-l-4 border-emerald-200 transform -translate-y-1/2 rotate-45 hidden md:block ${arEnabled ? 'bg-white/95' : 'bg-white'}`}></div>
+                 <div className={`absolute -top-4 left-1/2 w-6 h-6 border-t-4 border-l-4 border-emerald-200 transform -translate-x-1/2 rotate-45 block md:hidden ${arEnabled ? 'bg-white/95' : 'bg-white'}`}></div>
+                 
+                 <div className="text-sm font-black text-emerald-500 mb-1 uppercase tracking-wider bg-emerald-50 inline-block px-3 py-1 rounded-full border border-emerald-200">
+                   ด่าน {currentLevelIdx + 1}/20 : บทที่ {currentLevel.ch}
+                 </div>
+                 <h2 className="text-2xl md:text-3xl font-black text-slate-800 mb-3">{currentLevel.title}</h2>
+                 <p className="text-slate-700 text-lg leading-relaxed font-medium">
+                   {currentLevel.desc}
+                 </p>
+              </div>
+            </div>
+            
+            <div className={`rounded-3xl p-6 shadow-xl border-4 border-blue-100 ${arEnabled ? 'bg-white/95 backdrop-blur-sm' : 'bg-white'}`}>
+              <h3 className="font-bold text-slate-700 mb-4 text-lg flex items-center gap-2">
+                <Target className="text-blue-500"/> สิ่งที่ต้องตามหาในด่านนี้:
+              </h3>
+              
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                {Object.entries(currentLevel.req.reduce((acc, id) => ({ ...acc, [id]: (acc[id] || 0) + 1 }), {})).map(([id, count]) => (
+                  <div key={id} className={`flex items-center gap-3 p-3 rounded-2xl ${ITEMS[id].bg} border-2 border-emerald-200`}>
+                    <div className="text-3xl">{ITEMS[id].emoji}</div>
+                    <div className="flex flex-col">
+                      <span className="font-bold text-slate-700 text-sm">{ITEMS[id].text}</span>
+                      {count > 1 && (
+                        <span className="text-xs font-black text-emerald-700 bg-emerald-200 px-2 py-0.5 rounded-full mt-1 w-fit">
+                          ต้องเก็บ {count} ชิ้น
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              
+              {currentLevel.traps.length > 0 && (
+                <div className="mt-4 pt-4 border-t-2 border-slate-100">
+                  <h3 className="font-bold text-rose-500 mb-3 text-sm flex items-center gap-2">
+                    <Zap size={16}/> ต้องระวัง (ห้ามชนเด็ดขาด!):
+                  </h3>
+                  <div className="flex flex-wrap gap-3">
+                    {Object.entries(currentLevel.traps.reduce((acc, id) => ({ ...acc, [id]: (acc[id] || 0) + 1 }), {})).map(([id, count]) => (
+                      <div key={id} className={`flex items-center gap-2 px-3 py-2 rounded-full ${ITEMS[id].bg} border border-rose-200`}>
+                        <span className="text-xl">{ITEMS[id].emoji}</span>
+                        <span className="font-bold text-rose-700 text-xs">
+                          {ITEMS[id].text} {count > 1 ? `(มี ${count} จุด)` : ''}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <button 
+                onClick={() => setGameState('playing')}
+                className="w-full mt-6 bg-blue-500 hover:bg-blue-600 text-white font-black text-xl py-4 rounded-2xl transition-transform active:scale-95 shadow-[0_8px_0_rgba(29,78,216,1)] hover:shadow-[0_4px_0_rgba(29,78,216,1)] hover:translate-y-1"
+              >
+                พร้อมแล้ว! ลุยเลย 🚀
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- PLAYING STATE --- */}
+      {gameState === 'playing' && (
+        <>
+          <header className={`${themeColor} text-white px-4 py-3 shadow-lg flex items-center justify-between sticky top-0 z-20 border-b-4 border-black/10 transition-colors`}>
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center font-black text-2xl shadow-inner border-2 border-white/30">
+                <img src="https://api.dicebear.com/7.x/bottts/svg?seed=TeacherBot" alt="icon" className="w-8 h-8 opacity-90" />
+              </div>
+              <div>
+                <div className="text-xs font-bold text-white/90 uppercase tracking-widest bg-black/20 inline-block px-2 py-0.5 rounded-md mb-0.5">ด่านที่ {currentLevelIdx + 1}</div>
+                <div className="font-black text-base shadow-sm leading-tight text-white drop-shadow-md">{currentLevel.title}</div>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 sm:gap-4">
+              <button onClick={toggleAR} className="flex items-center gap-1.5 bg-black/30 px-3 py-1.5 rounded-full border border-white/40 hover:bg-black/50 transition-colors shadow-inner">
+                {arEnabled ? <CameraOff size={16} /> : <Camera size={16} />}
+                <span className="text-xs font-bold hidden sm:inline">{arEnabled ? 'ปิด AR' : 'เปิด AR'}</span>
+              </button>
+              <div className="flex gap-1 bg-black/30 px-2 py-1.5 rounded-full border border-white/40 shadow-inner">
+                {[1,2,3].map(s => (
+                  <Star key={s} size={20} className={s <= game.stars ? "text-yellow-300 fill-yellow-300 drop-shadow-[0_2px_2px_rgba(0,0,0,0.5)] animate-pulse" : "text-black/30 fill-black/10"} />
+                ))}
+              </div>
+            </div>
+          </header>
+
+          <main className="flex-1 max-w-6xl w-full mx-auto p-4 flex flex-col lg:flex-row gap-6 items-start mt-2 relative z-10">
+            {/* Left: Maze Board */}
+            <div className={`w-full lg:w-2/3 p-4 sm:p-6 rounded-[2rem] shadow-xl border-4 ${borderColor} relative flex flex-col transition-colors ${arEnabled ? 'bg-white/60 backdrop-blur-md' : 'bg-white'}`}>
+              
+              <div className="h-14 mb-2 flex flex-col items-center justify-center w-full z-10 relative pointer-events-none">
+                {toast ? (
+                  <div className={`px-6 py-2.5 rounded-full text-sm sm:text-base font-black shadow-lg animate-in slide-in-from-top-4 fade-in text-white border-2 border-white/50 flex items-center gap-2 whitespace-nowrap
+                    ${toast.type === 'success' ? 'bg-emerald-500' : toast.type === 'error' ? 'bg-rose-500' : 'bg-blue-500'}
+                  `}>
+                    {toast.msg}
+                  </div>
+                ) : (
+                  <span className={`text-sm font-bold py-2 px-4 rounded-full flex items-center gap-2 shadow-sm animate-pulse ${arEnabled ? 'bg-black/70 text-white border border-white/30' : 'bg-blue-100 text-blue-700 border-2 border-blue-200'}`}>
+                    <Hand size={18} /> ใช้นิ้วลากบนกระดาน หรือ Spacebar กระโดด
+                  </span>
+                )}
+              </div>
+
+              {/* กระดานเกม */}
+              <div 
+                ref={mazeRef}
+                className={`flex justify-center p-3 sm:p-6 rounded-[1.5rem] border-4 border-slate-200 shadow-inner overflow-x-auto transition-colors cursor-pointer relative ${arEnabled ? 'bg-slate-900/40 backdrop-blur-sm border-white/20' : 'bg-slate-100'}`}
+                style={{ touchAction: 'none' }}
+                onTouchStart={(e) => handleDragStart(e.touches[0].clientX, e.touches[0].clientY)}
+                onTouchMove={(e) => handleDragMove(e.touches[0].clientX, e.touches[0].clientY)}
+                onTouchEnd={handleDragEnd}
+                onTouchCancel={handleDragEnd}
+                onMouseDown={(e) => handleDragStart(e.clientX, e.clientY)}
+                onMouseMove={(e) => handleDragMove(e.clientX, e.clientY)}
+                onMouseUp={handleDragEnd}
+                onMouseLeave={handleDragEnd}
+              >
+                {!hasMoved && (
+                  <div className="absolute top-1/2 left-1/2 z-50 pointer-events-none transform -translate-x-1/2 -translate-y-1/2">
+                    <div className="text-6xl animate-finger">👆</div>
+                  </div>
+                )}
+
+                <div 
+                  className="grid gap-1 sm:gap-2 mx-auto select-none"
+                  style={{ gridTemplateColumns: `repeat(${game.maze[0]?.length || 10}, minmax(0, 1fr))` }}
+                >
+                  {game.maze.map((row, r) => row.map((cell, c) => {
+                    const isPlayer = game.pos.r === r && game.pos.c === c;
+                    let cellClass = "w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 lg:w-14 lg:h-14 rounded-xl flex items-center justify-center relative transition-all duration-200 pointer-events-none ";
+                    let content = null;
+
+                    if (cell === 'W') {
+                      cellClass += arEnabled 
+                        ? "bg-[#1e293b]/80 shadow-[0_4px_0_rgba(15,23,42,0.8),inset_0_2px_4px_rgba(255,255,255,0.1)] border border-white/10" 
+                        : "bg-[#475569] shadow-[0_4px_0_#334155,inset_0_2px_4px_rgba(255,255,255,0.2)]"; 
+                    } else {
+                      cellClass += arEnabled
+                        ? "bg-white/40 shadow-[inset_0_2px_4px_rgba(0,0,0,0.1)] border-2 border-white/50 backdrop-blur-md"
+                        : "bg-white shadow-[inset_0_2px_4px_rgba(0,0,0,0.05)] border-2 border-slate-200";
+                    }
+
+                    if (isPlayer) {
+                      content = <div className="absolute inset-0 m-auto flex items-center justify-center text-2xl sm:text-3xl lg:text-4xl drop-shadow-md z-10 animate-bounce">🧑‍🚀</div>;
+                    } else if (cell === 'S') {
+                      cellClass += arEnabled ? " bg-emerald-300/60 border-emerald-300/80" : " bg-emerald-100 border-emerald-300";
+                      content = <div className="text-xl sm:text-2xl">🚀</div>;
+                    } else if (cell === 'F') {
+                      cellClass += arEnabled ? " bg-yellow-300/60 border-yellow-300/80" : " bg-yellow-100 border-yellow-300";
+                      content = <div className="text-xl sm:text-2xl animate-pulse">⭐</div>;
+                    } else if (ITEMS[cell]) {
+                      const item = ITEMS[cell];
+                      content = <div className={`text-xl sm:text-2xl lg:text-3xl drop-shadow-sm ${item.type === 'good' ? 'animate-[bounce_2s_infinite]' : ''}`}>{item.emoji}</div>;
+                    }
+
+                    return <div key={`${r}-${c}`} className={cellClass}>{content}</div>;
+                  }))}
+                </div>
+              </div>
+
+              {/* D-Pad สำหรับมือถือ */}
+              <div className="mt-8 flex flex-col items-center gap-3 lg:hidden select-none touch-none">
+                <button 
+                  onTouchStart={(e) => handleBtnDown(e, -1, 0)} onMouseDown={(e) => handleBtnDown(e, -1, 0)}
+                  className={`w-16 h-16 rounded-2xl flex items-center justify-center shadow-[0_4px_0_rgba(59,130,246,0.5)] active:shadow-[0_0px_0_#93c5fd] active:translate-y-1 transition-all border-2 border-blue-200/50 ${arEnabled ? 'bg-blue-100/90 backdrop-blur-md' : 'bg-blue-100 hover:bg-blue-200'}`}>
+                  <ChevronUp size={36} className="text-blue-600 font-black" />
+                </button>
+                <div className="flex gap-3">
+                  <button 
+                    onTouchStart={(e) => handleBtnDown(e, 0, -1)} onMouseDown={(e) => handleBtnDown(e, 0, -1)}
+                    className={`w-16 h-16 rounded-2xl flex items-center justify-center shadow-[0_4px_0_rgba(59,130,246,0.5)] active:shadow-[0_0px_0_#93c5fd] active:translate-y-1 transition-all border-2 border-blue-200/50 ${arEnabled ? 'bg-blue-100/90 backdrop-blur-md' : 'bg-blue-100 hover:bg-blue-200'}`}>
+                    <ChevronLeft size={36} className="text-blue-600" />
+                  </button>
+                  <div className={`w-16 h-16 flex items-center justify-center rounded-2xl border-2 border-dashed pointer-events-none ${arEnabled ? 'bg-black/30 border-white/30 backdrop-blur-sm' : 'bg-slate-100/50 border-slate-300'}`}>
+                     <Hand size={24} className={arEnabled ? "text-white/70" : "text-slate-400"} />
+                  </div>
+                  <button 
+                    onTouchStart={(e) => handleBtnDown(e, 0, 1)} onMouseDown={(e) => handleBtnDown(e, 0, 1)}
+                    className={`w-16 h-16 rounded-2xl flex items-center justify-center shadow-[0_4px_0_rgba(59,130,246,0.5)] active:shadow-[0_0px_0_#93c5fd] active:translate-y-1 transition-all border-2 border-blue-200/50 ${arEnabled ? 'bg-blue-100/90 backdrop-blur-md' : 'bg-blue-100 hover:bg-blue-200'}`}>
+                    <ChevronRight size={36} className="text-blue-600" />
+                  </button>
+                </div>
+                <button 
+                  onTouchStart={(e) => handleBtnDown(e, 1, 0)} onMouseDown={(e) => handleBtnDown(e, 1, 0)}
+                  className={`w-16 h-16 rounded-2xl flex items-center justify-center shadow-[0_4px_0_rgba(59,130,246,0.5)] active:shadow-[0_0px_0_#93c5fd] active:translate-y-1 transition-all border-2 border-blue-200/50 ${arEnabled ? 'bg-blue-100/90 backdrop-blur-md' : 'bg-blue-100 hover:bg-blue-200'}`}>
+                  <ChevronDown size={36} className="text-blue-600" />
+                </button>
+              </div>
+            </div>
+
+            {/* Right: Info Panel */}
+            <div className="w-full lg:w-1/3 space-y-6">
+              
+              {/* AR Gesture Guide */}
+              {arEnabled && scriptsLoaded && !cameraError && (
+                 <div className="bg-white/90 backdrop-blur-md p-5 rounded-[2rem] shadow-lg border-4 border-emerald-300">
+                   <h3 className="font-black text-emerald-700 mb-3 flex items-center gap-2">
+                     <Eye size={20} /> คุมด้วยท่าทางกล้อง AR
+                   </h3>
+                   <div className="grid grid-cols-2 gap-2 text-xs sm:text-sm font-bold text-slate-700">
+                      <div className="bg-emerald-50 p-2 rounded-xl">✊ กำมือ<br/>= ซ้าย</div>
+                      <div className="bg-emerald-50 p-2 rounded-xl">🖐️ กางมือ<br/>= ขวา</div>
+                      <div className="bg-emerald-50 p-2 rounded-xl">🤏 จีบปลายนิ้ว<br/>= ขึ้น (โดด)</div>
+                      <div className="bg-emerald-50 p-2 rounded-xl">✌️ ชูสองนิ้ว<br/>= ลง</div>
+                   </div>
+                   <div className="mt-4 text-center bg-emerald-100 text-emerald-800 py-2.5 rounded-xl border-2 border-emerald-300 shadow-inner">
+                     {recognizedGesture ? (
+                       <span className="font-black animate-pulse flex items-center justify-center gap-2">
+                          {recognizedGesture === 'UP' ? '🤏 ตรวจพบ: ขึ้น' :
+                           recognizedGesture === 'DOWN' ? '✌️ ตรวจพบ: ลง' :
+                           recognizedGesture === 'LEFT' ? '✊ ตรวจพบ: ซ้าย' :
+                           '🖐️ ตรวจพบ: ขวา'}
+                       </span>
+                     ) : (
+                       <span className="font-bold text-emerald-600/70">นำมือส่องกล้องเพื่อเล่น...</span>
+                     )}
+                   </div>
+                 </div>
+              )}
+
+              <div className={`p-6 rounded-[2rem] shadow-lg border-4 border-slate-100 transition-colors ${arEnabled ? 'bg-white/90 backdrop-blur-md' : 'bg-white'}`}>
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="font-black text-slate-700 flex items-center gap-2 text-lg">
+                    🎒 กระเป๋าไอเทม
+                  </h3>
+                  <button onClick={() => initLevel(currentLevelIdx)} className="flex items-center gap-1 text-xs font-bold bg-slate-100 text-slate-500 px-3 py-1.5 rounded-full hover:bg-slate-200 transition-colors border border-slate-200 shadow-sm">
+                    <RotateCcw size={14} /> เริ่มใหม่
+                  </button>
+                </div>
+                <div className="space-y-3">
+                  {renderReqProgress()}
+                </div>
+              </div>
+              
+              <div className={`p-5 rounded-[2rem] shadow-xl border-4 transition-colors ${arEnabled ? 'bg-slate-900/90 backdrop-blur-md border-slate-600' : 'bg-slate-800 border-slate-700'}`}>
+                <div className="text-sm font-black text-slate-300 mb-3 text-center tracking-widest">แผนที่ด่านทั้งหมด</div>
+                <div className="grid grid-cols-5 gap-2">
+                  {LEVELS.map((l, i) => (
+                    <div 
+                      key={i} 
+                      className={`aspect-square rounded-xl flex items-center justify-center text-sm font-black cursor-pointer transition-all hover:scale-110 shadow-sm
+                        ${i === currentLevelIdx ? 'bg-white text-slate-900 border-4 border-blue-400' : 
+                          i < currentLevelIdx ? 'bg-emerald-400 text-white' : 'bg-slate-700 text-slate-400 border-2 border-slate-600'}
+                      `}
+                      onClick={() => {
+                        if (i <= Math.max(currentLevelIdx, levelStats.findLastIndex(v=>v>0)+1)) {
+                          initLevel(i);
+                        }
+                      }}
+                    >
+                      {i + 1}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+          </main>
+        </>
+      )}
+
+      {/* --- LEVEL COMPLETE MODAL --- */}
+      {(gameState === 'level_complete' || gameState === 'victory') && (
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-300">
+          <div className="bg-white rounded-[3rem] p-8 md:p-10 max-w-lg w-full shadow-[0_0_50px_rgba(0,0,0,0.3)] text-center relative overflow-hidden border-8 border-yellow-300">
+            
+            <div className="absolute top-0 left-0 w-full h-full bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-20 pointer-events-none"></div>
+            
+            <div className="w-28 h-28 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-6 shadow-inner border-4 border-emerald-300 relative z-10">
+              {currentLevelIdx === 19 ? <Trophy size={60} className="text-yellow-500" /> : <img src="https://api.dicebear.com/7.x/bottts/svg?seed=TeacherBot" alt="Botty" className="w-20 h-20" />}
+            </div>
+            
+            <h2 className="text-4xl font-black text-slate-800 mb-2 relative z-10">
+              {currentLevelIdx === 19 ? 'ชนะเลิศ!! 🎉' : 'เก่งมากๆ เลย! 🌟'}
+            </h2>
+            <p className="text-slate-600 mb-8 font-bold text-lg relative z-10 bg-slate-100 inline-block px-4 py-2 rounded-full">
+              น้องๆ ผ่านด่าน: {currentLevel.title}
+            </p>
+
+            <div className="flex justify-center gap-4 mb-10 relative z-10">
+              {[1,2,3].map(s => (
+                <Star 
+                  key={s} 
+                  size={64} 
+                  className={`transition-all duration-700 delay-${s*150} ${s <= game.stars ? "text-yellow-400 fill-yellow-400 scale-110 drop-shadow-[0_5px_10px_rgba(250,204,21,0.5)] animate-bounce" : "text-slate-200 fill-slate-100"}`} 
+                />
+              ))}
+            </div>
+
+            <div className="relative z-10">
+              {currentLevelIdx < 19 ? (
+                <div className="flex flex-col gap-4">
+                  <button 
+                    onClick={() => initLevel(currentLevelIdx + 1)}
+                    className="w-full bg-gradient-to-b from-blue-400 to-blue-600 hover:from-blue-500 hover:to-blue-700 text-white font-black text-2xl py-5 rounded-2xl transition-transform active:scale-95 shadow-[0_8px_0_rgba(30,58,138,1)] active:shadow-[0_0px_0_rgba(30,58,138,1)] flex items-center justify-center gap-3 border-2 border-blue-300"
+                  >
+                    ลุยด่านต่อไป <ArrowRight size={28} />
+                  </button>
+                  <button onClick={() => initLevel(currentLevelIdx)} className="text-base font-bold text-slate-400 hover:text-slate-600 py-2 flex justify-center items-center gap-2 mx-auto">
+                    <RotateCcw size={18} /> เล่นด่านนี้อีกครั้ง
+                  </button>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-4">
+                  <div className="bg-emerald-50 border-4 border-emerald-200 p-4 rounded-2xl mb-4">
+                    <p className="text-emerald-800 font-bold">
+                      เย้! ตอนนี้น้องๆ กลายเป็นสุดยอดพลเมืองดิจิทัลที่พร้อมท่องโลกออนไลน์อย่างปลอดภัยแล้วนะฮะ! 🚀
+                    </p>
+                  </div>
+                  <button 
+                    onClick={() => {
+                      setGameState('menu');
+                      if(arEnabled) toggleAR(); 
+                    }}
+                    className="w-full bg-gradient-to-b from-emerald-400 to-emerald-600 text-white font-black text-2xl py-5 rounded-2xl transition-transform active:scale-95 shadow-[0_8px_0_rgba(6,78,59,1)] active:shadow-none border-2 border-emerald-300"
+                  >
+                    🏠 กลับหน้าแรก
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
